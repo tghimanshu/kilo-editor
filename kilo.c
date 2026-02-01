@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -33,7 +34,15 @@ void checkQuitSequence(char c) {
 
 /***** DATA *****/
 
-struct termios orig_termios;
+struct editorConfig {
+  int screenrows;
+  int screencols;
+  struct termios orig_termios;
+};
+
+struct editorConfig E;
+
+// struct termios orig_termios;
 
 /***** TERMINAL *****/
 
@@ -46,15 +55,15 @@ void die(const char *s) {
 
 void disableRawMode() {
   // Return terminal to original state (passed by reference)
-  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios) == -1)
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1)
     die("tcsetattr"); // handle error
 }
 void enableRawMode() {
-  if (tcgetattr(STDIN_FILENO, &orig_termios) == -1)
+  if (tcgetattr(STDIN_FILENO, &E.orig_termios) == -1)
     die("tcgetattr");
   atexit(disableRawMode);
 
-  struct termios raw = orig_termios; // this copies the original state
+  struct termios raw = E.orig_termios; // this copies the original state
 
   // disable software flow control
   // IXON: disable Ctrl-S and ctrl-Q from being interpreted
@@ -124,109 +133,86 @@ char editorReadKey() {
   return c;
 }
 
+int getCursorPosition(int *rows, int *cols) {
+  char buff[32];
+  unsigned int i = 0;
+
+  if (write(STDOUT_FILENO, "\x1b[6n", 4) != 4)
+    return -1;
+
+  while (i < sizeof(buff) - 1) {
+    if (read(STDIN_FILENO, &buff[i], 1) != 1)
+      break;
+    if (buff[i] == 'R')
+      break;
+    i++;
+  }
+  buff[i] = '\0';
+
+  printf("\r\n buff[1]: '%s' \r\n", &buff[1]);
+
+  if (buff[0] != '\x1b' || buff[1] != '[')
+    return -1;
+
+  if (sscanf(&buff[2], "%d:%d", rows, cols) != 2)
+    return -1;
+
+  return 0;
+}
+
+int getWindowSize(int *rows, int *cols) {
+  // Cursor Positions: https://vt100.net/docs/vt100-ug/chapter3.html#CUF
+
+  // ioctl: input/output control
+  // STDOUT_FILENO: file descriptor for standard output
+  // TIOCGWINSZ: terminal input/output control code to get window size
+  // ws: pointer to struct winsize to store the window size
+  // returns -1 on failure, 0 on success
+  struct winsize ws;
+
+  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
+    // if (1 || ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
+    // move cursor to bottom-right corner
+    // \x1b is the escape character in hexadecimal
+    // [999C moves the cursor 999 columns to the right
+    // [999B moves the cursor 999 rows down
+    if (write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12) != 12)
+      return -1;
+
+    return getCursorPosition(rows, cols);
+  } else {
+    *cols = ws.ws_col;
+    *rows = ws.ws_row;
+    return 0;
+  }
+}
+
 /***** OUTPUT *****/
 
 void editorDrawRows() {
   // TODO: Make this dynamic when you know how to concat strings with integers
   // in C haha
-  for (int y = 0; y <= 24; ++y) {
-    char line[6] = "  |~\r\n";
-    switch (y) {
-    case 0:
-      line[1] = '1';
-      break;
-    case 1:
-      line[1] = '2';
-      break;
-    case 2:
-      line[1] = '3';
-      break;
-    case 3:
-      line[1] = '4';
-      break;
-    case 4:
-      line[1] = '5';
-      break;
-    case 5:
-      line[1] = '6';
-      break;
-    case 6:
-      line[1] = '7';
-      break;
-    case 7:
-      line[1] = '8';
-      break;
-    case 8:
-      line[1] = '9';
-      break;
-    case 9:
-      line[0] = '1';
-      line[1] = '0';
-      break;
-    case 10:
-      line[0] = '1';
-      line[1] = '1';
-      break;
-    case 11:
-      line[0] = '1';
-      line[1] = '2';
-      break;
-    case 12:
-      line[0] = '1';
-      line[1] = '3';
-      break;
-    case 13:
-      line[0] = '1';
-      line[1] = '4';
-      break;
-    case 14:
-      line[0] = '1';
-      line[1] = '5';
-      break;
-    case 15:
-      line[0] = '1';
-      line[1] = '6';
-      break;
-    case 16:
-      line[0] = '1';
-      line[1] = '7';
-      break;
-    case 17:
-      line[0] = '1';
-      line[1] = '8';
-      break;
-    case 18:
-      line[0] = '1';
-      line[1] = '9';
-      break;
-    case 19:
-      line[0] = '2';
-      line[1] = '0';
-      break;
-    case 20:
-      line[0] = '2';
-      line[1] = '1';
-      break;
-    case 21:
-      line[0] = '2';
-      line[1] = '2';
-      break;
-    case 22:
-      line[0] = '2';
-      line[1] = '3';
-      break;
-    case 23:
-      line[0] = '2';
-      line[1] = '4';
-      break;
-    case 24:
-      line[0] = '2';
-      line[1] = '5';
-    default:
-      break;
+  for (int y = 0; y <= E.screenrows; ++y) {
+    char line[8];
+    // remove warning for truncated literals
+    int len = y > 99 ? 99 : y;
+
+    if (y < 9) {
+      snprintf(line, 8, " %d ~\r\n", len + 1);
+    } else {
+      snprintf(line, 8, "%d ~\r\n", len + 1);
     }
+
     write(STDOUT_FILENO, line, 6);
   }
+  // int y;
+  // for (y = 0; y < E.screenrows; ++y) {
+  //   write(STDOUT_FILENO, "~", 1);
+  //
+  //   if (y < E.screenrows - 1) {
+  //     write(STDOUT_FILENO, "\r\n", 2);
+  //   }
+  // }
 }
 
 void editorRefreshScreen() {
@@ -265,8 +251,15 @@ void editorProcessKeypress() {
 
 /***** MAIN *****/
 
+int initEditor() {
+  if (getWindowSize(&E.screenrows, &E.screencols) == -1)
+    die("getWindowSize");
+  return 0;
+}
+
 int main() {
   enableRawMode();
+  initEditor();
 
   while (1) {
     editorRefreshScreen();
