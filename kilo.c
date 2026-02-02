@@ -192,12 +192,14 @@ int getWindowSize(int *rows, int *cols) {
 void editorDrawRows() {
   // TODO: Make this dynamic when you know how to concat strings with integers
   // in C haha
-  for (int y = 0; y <= E.screenrows; ++y) {
+  for (int y = 0; y <= E.screenrows - 2; ++y) {
     char line[8];
     // remove warning for truncated literals
     int len = y > 99 ? 99 : y;
 
-    if (y < 9) {
+    if (y == 0) {
+      snprintf(line, 8, " %d  \r\n", len + 1);
+    } else if (y < 9) {
       snprintf(line, 8, " %d ~\r\n", len + 1);
     } else {
       snprintf(line, 8, "%d ~\r\n", len + 1);
@@ -232,6 +234,7 @@ void editorRefreshScreen() {
   editorDrawRows();
 
   write(STDOUT_FILENO, "\x1b[H", 3);
+  write(STDOUT_FILENO, "\x1b[3C", 4);
 }
 
 /***** INPUT *****/
