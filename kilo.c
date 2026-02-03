@@ -187,25 +187,52 @@ int getWindowSize(int *rows, int *cols) {
   }
 }
 
+/***** APPEND BUFFER *****/
+
+struct abuf {
+  char *b;
+  int len;
+};
+
+void abAppend(struct abuf *ab, const char *s, int len) {
+  char *new = realloc(ab->b, ab->len + len);
+
+  if (new == NULL)
+    return;
+  memcpy(&new[ab->len], s, len);
+  ab->b = new;
+  ab->len += len;
+}
+
+void abFree(struct abuf *ab) { free(ab->b); }
+
+#define ABUF_INIT {NULL, 0}
+
 /***** OUTPUT *****/
 
-void editorDrawRows() {
+void editorDrawRows(struct abuf *ab) {
   // TODO: Make this dynamic when you know how to concat strings with integers
   // in C haha
-  for (int y = 0; y <= E.screenrows - 2; ++y) {
-    char line[8];
-    // remove warning for truncated literals
-    int len = y > 99 ? 99 : y;
+  for (int y = 0; y <= E.screenrows; ++y) {
+    // char line[8];
 
-    if (y == 0) {
-      snprintf(line, 8, " %d  \r\n", len + 1);
-    } else if (y < 9) {
-      snprintf(line, 8, " %d ~\r\n", len + 1);
-    } else {
-      snprintf(line, 8, "%d ~\r\n", len + 1);
+    // remove warning for truncated literals
+    // int len = y > 99 ? 99 : y;
+
+    // if (y == 0) {
+    //   snprintf(line, 8, " %d  \r\n", len + 1);
+    // } else if (y < 9) {
+    //   snprintf(line, 8, " %d ~\r\n", len + 1);
+    // } else {
+    //   snprintf(line, 8, "%d ~\r\n", len + 1);
+    // }
+    abAppend(ab, "~", 1);
+
+    if (y < E.screenrows - 1) {
+      abAppend(ab, "\r\n", 2);
     }
 
-    write(STDOUT_FILENO, line, 6);
+    // write(STDOUT_FILENO, line, 6);
   }
   // int y;
   // for (y = 0; y < E.screenrows; ++y) {
@@ -218,23 +245,30 @@ void editorDrawRows() {
 }
 
 void editorRefreshScreen() {
+  struct abuf ab = ABUF_INIT;
 
   // clear screen
   // \x1b is the escape character in hexadecimal
   // [2J is the ANSI escape code to clear the entire screen
   // 4 is the length of the escape sequence
-  write(STDOUT_FILENO, "\x1b[2J", 4); // clear entire screen
-                                      //
+  // write(STDOUT_FILENO, "\x1b[2J", 4); // clear entire screen
+  abAppend(&ab, "\x1b[2J", 4);
+  //
   // reposition cursor to top-left corner
   // \x1b is the escape character in hexadecimal
   // [H is the ANSI escape code to move the cursor to the home position
   // top-left
-  write(STDOUT_FILENO, "\x1b[H", 3); // reposition cursor to top-left corner
+  // write(STDOUT_FILENO, "\x1b[H", 3); // reposition cursor to top-left corner
+  abAppend(&ab, "\x1b[H", 3);
 
-  editorDrawRows();
+  editorDrawRows(&ab);
 
-  write(STDOUT_FILENO, "\x1b[H", 3);
-  write(STDOUT_FILENO, "\x1b[3C", 4);
+  abAppend(&ab, "\x1b[H", 3);
+
+  // write(STDOUT_FILENO, "\x1b[H", 3);
+  // write(STDOUT_FILENO, "\x1b[3C", 4);
+  write(STDOUT_FILENO, ab.b, ab.len);
+  abFree(&ab);
 }
 
 /***** INPUT *****/
