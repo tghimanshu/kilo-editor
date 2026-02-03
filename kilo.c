@@ -14,6 +14,8 @@
 // bitwise AND with 0001 1111 -> maps to control key
 #define CTRL_KEY(k) ((k) & 0x1f)
 
+#define KILO_VERSION "0.0.1"
+
 /***** EXIT SEQUENCES *****/
 
 // Quit Sequence ":q\n"
@@ -35,6 +37,7 @@ void checkQuitSequence(char c) {
 /***** DATA *****/
 
 struct editorConfig {
+  int cx, cy;
   int screenrows;
   int screencols;
   struct termios orig_termios;
@@ -216,6 +219,30 @@ void editorDrawRows(struct abuf *ab) {
   for (int y = 0; y <= E.screenrows; ++y) {
     // char line[8];
 
+    if (y == E.screenrows / 3) {
+      char welcome[80];
+
+      int welcomelen = snprintf(welcome, sizeof(welcome),
+                                "Kilo editor -- version %s", KILO_VERSION);
+      if (welcomelen > E.screencols)
+        welcomelen = E.screencols;
+
+      int padding = (E.screencols - welcomelen) / 2;
+
+      if (padding) {
+        abAppend(ab, "~", 1);
+        padding--;
+      }
+
+      while (padding--) {
+        abAppend(ab, " ", 1);
+      }
+
+      abAppend(ab, welcome, welcomelen);
+    } else {
+      abAppend(ab, "~", 1);
+    }
+
     // remove warning for truncated literals
     // int len = y > 99 ? 99 : y;
 
@@ -226,8 +253,15 @@ void editorDrawRows(struct abuf *ab) {
     // } else {
     //   snprintf(line, 8, "%d ~\r\n", len + 1);
     // }
-    abAppend(ab, "~", 1);
 
+    // clear line
+    // \x1b is the escape character in hexadecimal
+    // [K is the ANSI escape code to clear from cursor to the end of the line
+    // default is [0K whic clears to the right of the cursor
+    // we use [K which is equivalent to [0K
+    // [1K would clear form the beginning of the line to the cursor
+    // [2K would clear the entire line
+    abAppend(ab, "\x1b[K", 3);
     if (y < E.screenrows - 1) {
       abAppend(ab, "\r\n", 2);
     }
@@ -247,12 +281,16 @@ void editorDrawRows(struct abuf *ab) {
 void editorRefreshScreen() {
   struct abuf ab = ABUF_INIT;
 
+  // hide cursor
+  // \x1b is the escape character in hexadecimal
+  // [?25l is the ANSI escape code to hide the cursor
+  abAppend(&ab, "\x1b[?25l", 6);
   // clear screen
   // \x1b is the escape character in hexadecimal
   // [2J is the ANSI escape code to clear the entire screen
   // 4 is the length of the escape sequence
   // write(STDOUT_FILENO, "\x1b[2J", 4); // clear entire screen
-  abAppend(&ab, "\x1b[2J", 4);
+  // abAppend(&ab, "\x1b[2J", 4);
   //
   // reposition cursor to top-left corner
   // \x1b is the escape character in hexadecimal
@@ -264,6 +302,7 @@ void editorRefreshScreen() {
   editorDrawRows(&ab);
 
   abAppend(&ab, "\x1b[H", 3);
+  abAppend(&ab, "\x1b[?25h", 6); // show cursor
 
   // write(STDOUT_FILENO, "\x1b[H", 3);
   // write(STDOUT_FILENO, "\x1b[3C", 4);
@@ -289,6 +328,9 @@ void editorProcessKeypress() {
 /***** MAIN *****/
 
 int initEditor() {
+  E.cx = 0;
+  E.cy = 0;
+
   if (getWindowSize(&E.screenrows, &E.screencols) == -1)
     die("getWindowSize");
   return 0;
