@@ -14,6 +14,13 @@
 // bitwise AND with 0001 1111 -> maps to control key
 #define CTRL_KEY(k) ((k) & 0x1f)
 
+enum editorKey {
+  ARROW_LEFT = 1000, // all others will auto map to 1001, 1002 and so on
+  ARROW_RIGHT,
+  ARROW_UP,
+  ARROW_DOWN,
+};
+
 #define KILO_VERSION "0.0.1"
 
 /***** EXIT SEQUENCES *****/
@@ -79,7 +86,7 @@ void enableRawMode() {
     die("tcsetattr");
 }
 
-char editorReadKey() {
+int editorReadKey() {
   int nread; // number of bytes read
   char c;    // character read
 
@@ -90,8 +97,32 @@ char editorReadKey() {
       die("read");
   }
 
-  // return the character read
-  return c;
+  // Arrow Keys
+  if (c == '\x1b') {
+    char seq[3];
+
+    if (read(STDIN_FILENO, &seq[0], 1) != 1)
+      return '\x1b';
+    if (read(STDIN_FILENO, &seq[1], 1) != 1)
+      return '\x1b';
+
+    if (seq[0] == '[') {
+      switch (seq[1]) {
+      case 'A':
+        return ARROW_UP;
+      case 'B':
+        return ARROW_DOWN;
+      case 'C':
+        return ARROW_RIGHT;
+      case 'D':
+        return ARROW_LEFT;
+      }
+    }
+
+    return '\x1b';
+  } else {
+    return c;
+  }
 }
 
 int getCursorPosition(int *rows, int *cols) {
@@ -164,9 +195,7 @@ void abFree(struct abuf *ab) { free(ab->b); }
 void editorDrawRows(struct abuf *ab) {
   // TODO: Make this dynamic when you know how to concat strings with integers
   // in C haha
-  for (int y = 0; y <= E.screenrows; ++y) {
-    // char line[8];
-
+  for (int y = 0; y < E.screenrows; ++y) {
     if (y == E.screenrows / 3) {
       char welcome[80];
 
@@ -192,7 +221,7 @@ void editorDrawRows(struct abuf *ab) {
     }
 
     abAppend(ab, "\x1b[K", 3);
-    if (y < E.screenrows - 1) {
+    if (y < E.screenrows - 2) {
       abAppend(ab, "\r\n", 2);
     }
   }
@@ -206,7 +235,10 @@ void editorRefreshScreen() {
 
   editorDrawRows(&ab);
 
-  abAppend(&ab, "\x1b[H", 3);
+  char buff[32];
+  snprintf(buff, sizeof(buff), "\x1b[%d;%dH", E.cy + 1, E.cx + 1);
+  abAppend(&ab, buff, strlen(buff));
+
   abAppend(&ab, "\x1b[?25h", 6); // show cursor
                                  //
   write(STDOUT_FILENO, ab.b, ab.len);
@@ -215,15 +247,62 @@ void editorRefreshScreen() {
 
 /***** INPUT *****/
 
+void editorMoveCursor(int key) {
+  switch (key) {
+  case ARROW_LEFT:
+  case 'h':
+    if (E.cx <= 0) {
+      E.cx = 0;
+    } else {
+      E.cx--;
+    }
+    break;
+  case ARROW_RIGHT:
+  case 'l':
+    if (E.cx >= E.screencols - 1) {
+      E.cx = E.screencols - 1;
+    } else {
+      E.cx++;
+    }
+    break;
+  case ARROW_DOWN:
+  case 'j':
+    if (E.cy >= E.screenrows - 1) {
+      E.cy = E.screenrows - 1;
+    } else {
+      E.cy++;
+    }
+    break;
+  case ARROW_UP:
+  case 'k':
+    if (E.cy <= 0) {
+      E.cy = 0;
+    } else {
+      E.cy--;
+    }
+    break;
+  }
+}
+
 void editorProcessKeypress() {
-  char c = editorReadKey();
+  int c = editorReadKey();
 
   switch (c) {
   case CTRL_KEY('q'):
     write(STDOUT_FILENO, "\x1b[2J", 4); // clear entire screen
-    write(STDOUT_FILENO, "\x1b[H",
-          3); // reposition cursor to top-left corner
+    write(STDOUT_FILENO, "\x1b[H", 3);  // cursor to top-left corner
     exit(0);
+    break;
+
+  case ARROW_UP:
+  case ARROW_DOWN:
+  case ARROW_LEFT:
+  case ARROW_RIGHT:
+  case 'h':
+  case 'j':
+  case 'k':
+  case 'l':
+    editorMoveCursor(c);
     break;
   }
 }
