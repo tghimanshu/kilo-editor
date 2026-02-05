@@ -1,6 +1,6 @@
 /***** INCLUDES *****/
 
-#include <ctype.h>
+// #include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -222,6 +222,10 @@ void editorDrawRows(struct abuf *ab) {
   // TODO: Make this dynamic when you know how to concat strings with integers
   // in C haha
   for (int y = 0; y < E.screenrows; ++y) {
+    char rowNumber[6];
+
+    snprintf(rowNumber, sizeof(rowNumber), "%d", y + 1);
+
     if (y == E.screenrows / 3) {
       char welcome[80];
 
@@ -233,8 +237,9 @@ void editorDrawRows(struct abuf *ab) {
       int padding = (E.screencols - welcomelen) / 2;
 
       if (padding) {
-        abAppend(ab, "~", 1);
-        padding--;
+        abAppend(ab, rowNumber, strlen(rowNumber) + 1);
+        abAppend(ab, " ~", 2);
+        padding -= strlen(rowNumber) + 3;
       }
 
       while (padding--) {
@@ -243,11 +248,15 @@ void editorDrawRows(struct abuf *ab) {
 
       abAppend(ab, welcome, welcomelen);
     } else {
-      abAppend(ab, "~", 1);
+      if (y < 9) {
+        abAppend(ab, " ", 1);
+      }
+      abAppend(ab, rowNumber, strlen(rowNumber) + 1);
+      abAppend(ab, " ~", 2);
     }
 
     abAppend(ab, "\x1b[K", 3);
-    if (y < E.screenrows - 2) {
+    if (y < E.screenrows - 1) {
       abAppend(ab, "\r\n", 2);
     }
   }
@@ -349,7 +358,7 @@ void editorProcessKeypress() {
 /***** MAIN *****/
 
 int initEditor() {
-  E.cx = 0;
+  E.cx = 3;
   E.cy = 0;
 
   if (getWindowSize(&E.screenrows, &E.screencols) == -1)
