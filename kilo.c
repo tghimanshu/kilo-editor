@@ -34,18 +34,6 @@ enum editorKey {
 char *quitSequence = ":q\n";
 char quitBuffer[3];
 
-void checkQuitSequence(char c) {
-  if (c == quitSequence[0]) {
-    quitBuffer[0] = c;
-  } else if (c == quitSequence[1] && quitBuffer[0] == quitSequence[0]) {
-    quitBuffer[1] = c;
-  } else if (c == quitSequence[2] && quitBuffer[1] == quitSequence[1]) {
-    exit(0);
-  } else {
-    quitBuffer[0] = quitBuffer[1] = '\0';
-  }
-}
-
 /***** DATA *****/
 
 struct editorConfig {
