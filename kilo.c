@@ -53,7 +53,7 @@ struct editorConfig {
   int screenrows;
   int screencols;
   int numrows;
-  erow row;
+  erow *row;
   struct termios orig_termios;
 };
 
@@ -209,6 +209,12 @@ int getWindowSize(int *rows, int *cols) {
   }
 }
 
+/***** ROW OPERATIONS *****/
+
+// void editorAppendRow(char *s, size_t len) {
+//
+// }
+
 /***** File I/O *****/
 
 void editorOpen(char *filename) {
@@ -217,25 +223,28 @@ void editorOpen(char *filename) {
     die("fopen");
 
   size_t linecap = 0;
-  ssize_t linelen;
+
   char *line = NULL;
+  ssize_t linelen;
+  while ((linelen = getline(&line, &linecap, fp)) != -1) {
+    if (linelen != -1) {
+      while (linelen > 0 &&
+             (line[linelen - 1] == '\n' || line[linelen - 1] == '\r'))
+        linelen--;
 
-  linelen = getline(&line, &linecap, fp);
-  if (linelen != -1) {
-    while (linelen > 0 &&
-           (line[linelen - 1] == '\n' || line[linelen - 1] == '\r'))
-      linelen--;
+      // char *line = "Hello, world! This is super interesting and easy to work
+      // with.";
+      // ssize_t linelen = strlen(line);
+      E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
+      E.row[E.numrows].chars = malloc(linelen + 1);
 
-    // char *line = "Hello, world! This is super interesting and easy to work
-    // with.";
-    // ssize_t linelen = strlen(line);
-    E.row.chars = malloc(linelen + 1);
-    snprintf(E.row.chars, linelen, "%s", line);
+      // snprintf(E.row[linecap].chars, linelen, "%s", line);
 
-    memcpy(E.row.chars, line, linelen);
-    E.row.size = linelen;
-    E.row.chars[linelen] = '\0';
-    E.numrows = 1;
+      memcpy(E.row[E.numrows].chars, line, linelen);
+      E.row[E.numrows].size = linelen;
+      E.row[E.numrows].chars[linelen] = '\0';
+      E.numrows += 1;
+    }
   }
 
   free(line);
@@ -304,7 +313,7 @@ void editorDrawRows(struct abuf *ab) {
         abAppend(ab, " ~", 2);
       }
     } else {
-      int len = E.row.size + strlen(rowNumber) + 1;
+      int len = E.row[y].size + strlen(rowNumber) + 1;
       if (len > E.screencols)
         len = E.screencols;
 
@@ -313,7 +322,7 @@ void editorDrawRows(struct abuf *ab) {
       }
       abAppend(ab, rowNumber, strlen(rowNumber) + 1);
       abAppend(ab, " ", 1);
-      abAppend(ab, E.row.chars, len - strlen(rowNumber) - 1);
+      abAppend(ab, E.row[y].chars, len - strlen(rowNumber) - 1);
     }
 
     abAppend(ab, "\x1b[K", 3);
@@ -422,6 +431,7 @@ int initEditor() {
   E.cx = 3;
   E.cy = 0;
   E.numrows = 0;
+  E.row = NULL;
 
   if (getWindowSize(&E.screenrows, &E.screencols) == -1)
     die("getWindowSize");
