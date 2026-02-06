@@ -1,5 +1,11 @@
 /***** INCLUDES *****/
 
+// These feature test macros allow us to use functions like `getline`
+// without worrying about the C library version.
+#define _DEFAULT_SOURCE
+#define _BSD_SOURCE
+#define _GNU_SOURCE
+
 // #include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
@@ -205,16 +211,35 @@ int getWindowSize(int *rows, int *cols) {
 
 /***** File I/O *****/
 
-void editorOpen() {
-  char *line = "Hello, world! This is super interesting and easy to work with.";
-  ssize_t linelen = strlen(line);
-  E.row.chars = malloc(linelen + 1);
-  snprintf(E.row.chars, linelen, "%s", line);
+void editorOpen(char *filename) {
+  FILE *fp = fopen(filename, "r");
+  if (!fp)
+    die("fopen");
 
-  memcpy(E.row.chars, line, linelen);
-  E.row.size = linelen;
-  E.row.chars[linelen] = '\0';
-  E.numrows = 1;
+  size_t linecap = 0;
+  ssize_t linelen;
+  char *line = NULL;
+
+  linelen = getline(&line, &linecap, fp);
+  if (linelen != -1) {
+    while (linelen > 0 &&
+           (line[linelen - 1] == '\n' || line[linelen - 1] == '\r'))
+      linelen--;
+
+    // char *line = "Hello, world! This is super interesting and easy to work
+    // with.";
+    // ssize_t linelen = strlen(line);
+    E.row.chars = malloc(linelen + 1);
+    snprintf(E.row.chars, linelen, "%s", line);
+
+    memcpy(E.row.chars, line, linelen);
+    E.row.size = linelen;
+    E.row.chars[linelen] = '\0';
+    E.numrows = 1;
+  }
+
+  free(line);
+  fclose(fp);
 }
 
 /***** APPEND BUFFER *****/
@@ -250,7 +275,7 @@ void editorDrawRows(struct abuf *ab) {
 
     if (y >= E.numrows) {
 
-      if (y == E.screenrows / 3) {
+      if (E.numrows == 0 && y == E.screenrows / 3) {
         char welcome[80];
 
         int welcomelen = snprintf(welcome, sizeof(welcome),
@@ -403,10 +428,11 @@ int initEditor() {
   return 0;
 }
 
-int main() {
+int main(int argc, char *argv[]) {
   enableRawMode();
   initEditor();
-  editorOpen();
+  if (argc >= 2)
+    editorOpen(argv[1]);
 
   while (1) {
     editorRefreshScreen();
