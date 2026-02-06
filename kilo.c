@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/types.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -36,10 +37,17 @@ char quitBuffer[3];
 
 /***** DATA *****/
 
+typedef struct erow {
+  int size;
+  char *chars;
+} erow;
+
 struct editorConfig {
   int cx, cy;
   int screenrows;
   int screencols;
+  int numrows;
+  erow row;
   struct termios orig_termios;
 };
 
@@ -195,6 +203,20 @@ int getWindowSize(int *rows, int *cols) {
   }
 }
 
+/***** File I/O *****/
+
+void editorOpen() {
+  char *line = "Hello, world! This is super interesting and easy to work with.";
+  ssize_t linelen = strlen(line);
+  E.row.chars = malloc(linelen + 1);
+  snprintf(E.row.chars, linelen, "%s", line);
+
+  memcpy(E.row.chars, line, linelen);
+  E.row.size = linelen;
+  E.row.chars[linelen] = '\0';
+  E.numrows = 1;
+}
+
 /***** APPEND BUFFER *****/
 
 struct abuf {
@@ -222,37 +244,51 @@ void editorDrawRows(struct abuf *ab) {
   // TODO: Make this dynamic when you know how to concat strings with integers
   // in C haha
   for (int y = 0; y < E.screenrows; ++y) {
-    char rowNumber[6];
+    char rowNumber[32];
 
     snprintf(rowNumber, sizeof(rowNumber), "%d", y + 1);
 
-    if (y == E.screenrows / 3) {
-      char welcome[80];
+    if (y >= E.numrows) {
 
-      int welcomelen = snprintf(welcome, sizeof(welcome),
-                                "Kilo editor -- version %s", KILO_VERSION);
-      if (welcomelen > E.screencols)
-        welcomelen = E.screencols;
+      if (y == E.screenrows / 3) {
+        char welcome[80];
 
-      int padding = (E.screencols - welcomelen) / 2;
+        int welcomelen = snprintf(welcome, sizeof(welcome),
+                                  "Kilo editor -- version %s", KILO_VERSION);
+        if (welcomelen > E.screencols)
+          welcomelen = E.screencols;
 
-      if (padding) {
+        int padding = (E.screencols - welcomelen) / 2;
+
+        if (padding) {
+          abAppend(ab, rowNumber, strlen(rowNumber) + 1);
+          abAppend(ab, " ~", 2);
+          padding -= strlen(rowNumber) + 3;
+        }
+
+        while (padding--) {
+          abAppend(ab, " ", 1);
+        }
+
+        abAppend(ab, welcome, welcomelen);
+      } else {
+        if (y < 9) {
+          abAppend(ab, " ", 1);
+        }
         abAppend(ab, rowNumber, strlen(rowNumber) + 1);
         abAppend(ab, " ~", 2);
-        padding -= strlen(rowNumber) + 3;
       }
-
-      while (padding--) {
-        abAppend(ab, " ", 1);
-      }
-
-      abAppend(ab, welcome, welcomelen);
     } else {
+      int len = E.row.size + strlen(rowNumber) + 1;
+      if (len > E.screencols)
+        len = E.screencols;
+
       if (y < 9) {
         abAppend(ab, " ", 1);
       }
       abAppend(ab, rowNumber, strlen(rowNumber) + 1);
-      abAppend(ab, " ~", 2);
+      abAppend(ab, " ", 1);
+      abAppend(ab, E.row.chars, len - strlen(rowNumber) - 1);
     }
 
     abAppend(ab, "\x1b[K", 3);
@@ -334,13 +370,13 @@ void editorProcessKeypress() {
     int times = E.screenrows;
     while (times--)
       editorMoveCursor(c == PAGE_UP ? ARROW_UP : ARROW_DOWN);
-  }
+  } break;
   case HOME_KEY:
   case END_KEY: {
     int times = E.screencols;
     while (times--)
       editorMoveCursor(c == HOME_KEY ? ARROW_LEFT : ARROW_RIGHT);
-  }
+  } break;
 
   case ARROW_UP:
   case ARROW_DOWN:
@@ -360,6 +396,7 @@ void editorProcessKeypress() {
 int initEditor() {
   E.cx = 3;
   E.cy = 0;
+  E.numrows = 0;
 
   if (getWindowSize(&E.screenrows, &E.screencols) == -1)
     die("getWindowSize");
@@ -369,6 +406,7 @@ int initEditor() {
 int main() {
   enableRawMode();
   initEditor();
+  editorOpen();
 
   while (1) {
     editorRefreshScreen();
