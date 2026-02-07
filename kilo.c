@@ -50,6 +50,7 @@ typedef struct erow {
 
 struct editorConfig {
   int cx, cy;
+  int rowoff;
   int screenrows;
   int screencols;
   int numrows;
@@ -279,8 +280,9 @@ void editorDrawRows(struct abuf *ab) {
   // in C haha
   for (int y = 0; y < E.screenrows; ++y) {
     char rowNumber[32];
+    int fileRow = y + E.rowoff;
 
-    snprintf(rowNumber, sizeof(rowNumber), "%d", y + 1);
+    snprintf(rowNumber, sizeof(rowNumber), "%d", fileRow + 1);
 
     if (y >= E.numrows) {
 
@@ -313,7 +315,7 @@ void editorDrawRows(struct abuf *ab) {
         abAppend(ab, " ~", 2);
       }
     } else {
-      int len = E.row[y].size + strlen(rowNumber) + 1;
+      int len = E.row[fileRow].size + strlen(rowNumber) + 1;
       if (len > E.screencols)
         len = E.screencols;
 
@@ -322,7 +324,7 @@ void editorDrawRows(struct abuf *ab) {
       }
       abAppend(ab, rowNumber, strlen(rowNumber) + 1);
       abAppend(ab, " ", 1);
-      abAppend(ab, E.row[y].chars, len - strlen(rowNumber) - 1);
+      abAppend(ab, E.row[fileRow].chars, len - strlen(rowNumber) - 1);
     }
 
     abAppend(ab, "\x1b[K", 3);
@@ -374,6 +376,9 @@ void editorMoveCursor(int key) {
   case 'j':
     if (E.cy >= E.screenrows - 1) {
       E.cy = E.screenrows - 1;
+      if (E.rowoff < E.numrows - E.screenrows) {
+        E.rowoff++;
+      }
     } else {
       E.cy++;
     }
@@ -382,6 +387,9 @@ void editorMoveCursor(int key) {
   case 'k':
     if (E.cy <= 0) {
       E.cy = 0;
+      if (E.rowoff > 0) {
+        E.rowoff--;
+      }
     } else {
       E.cy--;
     }
@@ -432,6 +440,7 @@ int initEditor() {
   E.cy = 0;
   E.numrows = 0;
   E.row = NULL;
+  E.rowoff = 0;
 
   if (getWindowSize(&E.screenrows, &E.screencols) == -1)
     die("getWindowSize");
