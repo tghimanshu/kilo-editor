@@ -51,6 +51,7 @@ typedef struct erow {
 struct editorConfig {
   int cx, cy;
   int rowoff;
+  int coloff;
   int screenrows;
   int screencols;
   int numrows;
@@ -212,9 +213,17 @@ int getWindowSize(int *rows, int *cols) {
 
 /***** ROW OPERATIONS *****/
 
-// void editorAppendRow(char *s, size_t len) {
-//
-// }
+void editorAppendRow(char *s, size_t len) {
+  E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
+  int at = E.numrows;
+
+  E.row[at].size = len;
+  E.row[E.numrows].chars = malloc(len + 1);
+
+  memcpy(E.row[at].chars, s, len);
+  E.row[at].chars[len] = '\0';
+  E.numrows += 1;
+}
 
 /***** File I/O *****/
 
@@ -233,18 +242,7 @@ void editorOpen(char *filename) {
              (line[linelen - 1] == '\n' || line[linelen - 1] == '\r'))
         linelen--;
 
-      // char *line = "Hello, world! This is super interesting and easy to work
-      // with.";
-      // ssize_t linelen = strlen(line);
-      E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
-      E.row[E.numrows].chars = malloc(linelen + 1);
-
-      // snprintf(E.row[linecap].chars, linelen, "%s", line);
-
-      memcpy(E.row[E.numrows].chars, line, linelen);
-      E.row[E.numrows].size = linelen;
-      E.row[E.numrows].chars[linelen] = '\0';
-      E.numrows += 1;
+      editorAppendRow(line, linelen);
     }
   }
 
@@ -275,9 +273,17 @@ void abFree(struct abuf *ab) { free(ab->b); }
 
 /***** OUTPUT *****/
 
+void editorScroll() {
+  if (E.cy < E.rowoff) {
+    E.rowoff = E.cy;
+  }
+
+  if (E.cy >= E.rowoff + E.screenrows) {
+    E.rowoff = E.cy - E.screenrows + 1;
+  }
+}
+
 void editorDrawRows(struct abuf *ab) {
-  // TODO: Make this dynamic when you know how to concat strings with integers
-  // in C haha
   for (int y = 0; y < E.screenrows; ++y) {
     char rowNumber[32];
     int fileRow = y + E.rowoff;
@@ -335,6 +341,8 @@ void editorDrawRows(struct abuf *ab) {
 }
 
 void editorRefreshScreen() {
+  editorScroll();
+
   struct abuf ab = ABUF_INIT;
 
   abAppend(&ab, "\x1b[?25l", 6);
@@ -342,8 +350,13 @@ void editorRefreshScreen() {
 
   editorDrawRows(&ab);
 
+  char rowOffStr[32];
+  snprintf(rowOffStr, sizeof(rowOffStr), "%d", E.rowoff);
+  abAppend(&ab, "\x1b[0;10H", 7);
+  abAppend(&ab, rowOffStr, strlen(rowOffStr));
+
   char buff[32];
-  snprintf(buff, sizeof(buff), "\x1b[%d;%dH", E.cy + 1, E.cx + 1);
+  snprintf(buff, sizeof(buff), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, E.cx + 1);
   abAppend(&ab, buff, strlen(buff));
 
   abAppend(&ab, "\x1b[?25h", 6); // show cursor
@@ -374,14 +387,17 @@ void editorMoveCursor(int key) {
     break;
   case ARROW_DOWN:
   case 'j':
-    if (E.cy >= E.screenrows - 1) {
-      E.cy = E.screenrows - 1;
-      if (E.rowoff < E.numrows - E.screenrows) {
-        E.rowoff++;
-      }
-    } else {
+    if (E.cy < E.numrows) {
       E.cy++;
     }
+    // if (E.cy >= E.screenrows - 1) {
+    //   E.cy = E.screenrows - 1;
+    //   if (E.rowoff < E.numrows - E.screenrows) {
+    //     E.rowoff++;
+    //   }
+    // } else {
+    //   E.cy++;
+    // }
     break;
   case ARROW_UP:
   case 'k':
@@ -440,6 +456,7 @@ int initEditor() {
   E.cy = 0;
   E.numrows = 0;
   E.row = NULL;
+  E.rowoff = 0;
   E.rowoff = 0;
 
   if (getWindowSize(&E.screenrows, &E.screencols) == -1)
