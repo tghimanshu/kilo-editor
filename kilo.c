@@ -350,11 +350,6 @@ void editorRefreshScreen() {
 
   editorDrawRows(&ab);
 
-  char rowOffStr[32];
-  snprintf(rowOffStr, sizeof(rowOffStr), "%d", E.rowoff);
-  abAppend(&ab, "\x1b[0;10H", 7);
-  abAppend(&ab, rowOffStr, strlen(rowOffStr));
-
   char buff[32];
   snprintf(buff, sizeof(buff), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, E.cx + 1);
   abAppend(&ab, buff, strlen(buff));
