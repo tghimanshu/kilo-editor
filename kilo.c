@@ -214,7 +214,7 @@ int getWindowSize(int *rows, int *cols) {
 /***** ROW OPERATIONS *****/
 
 void editorAppendRow(char *s, size_t len) {
-  E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
+  E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1 + 4));
   int at = E.numrows;
 
   E.row[at].size = len;
@@ -329,7 +329,7 @@ void editorDrawRows(struct abuf *ab) {
         abAppend(ab, " ~", 2);
       }
     } else {
-      int len = (E.row[fileRow].size - E.coloff) + strlen(rowNumber) + 1;
+      int len = (E.row[fileRow].size - E.coloff) + strlen(rowNumber) + 2;
       if (len < 0)
         len = 0;
       if (len > E.screencols)
@@ -341,7 +341,7 @@ void editorDrawRows(struct abuf *ab) {
       abAppend(ab, rowNumber, strlen(rowNumber) + 1);
       abAppend(ab, " ", 1);
       abAppend(ab, &E.row[fileRow].chars[E.coloff],
-               len - strlen(rowNumber) - 1);
+               len - strlen(rowNumber) - 2);
     }
 
     abAppend(ab, "\x1b[K", 3);
