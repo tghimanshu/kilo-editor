@@ -287,7 +287,7 @@ void editorScroll() {
   }
 
   if (E.cx >= E.coloff + E.screencols) {
-    E.coloff = E.cx - E.screencols + 1 + 4;
+    E.coloff = E.cx - E.screencols + 1;
   }
 }
 
@@ -367,7 +367,7 @@ void editorRefreshScreen() {
   abAppend(&ab, buff, strlen(buff));
 
   abAppend(&ab, "\x1b[?25h", 6); // show cursor
-                                 //
+
   write(STDOUT_FILENO, ab.b, ab.len);
   abFree(&ab);
 }
@@ -376,28 +376,31 @@ void editorRefreshScreen() {
 
 void editorMoveCursor(int key) {
   switch (key) {
+
   case ARROW_LEFT:
   case 'h':
-    E.cx--;
+    if (E.cx <= 0) {
+      E.cx = 0;
+      if (E.coloff > 0) {
+        E.coloff--;
+      }
+    } else {
+      E.cx--;
+    }
     break;
+
   case ARROW_RIGHT:
   case 'l':
     E.cx++;
     break;
+
   case ARROW_DOWN:
   case 'j':
     if (E.cy < E.numrows) {
       E.cy++;
     }
-    // if (E.cy >= E.screenrows - 1) {
-    //   E.cy = E.screenrows - 1;
-    //   if (E.rowoff < E.numrows - E.screenrows) {
-    //     E.rowoff++;
-    //   }
-    // } else {
-    //   E.cy++;
-    // }
     break;
+
   case ARROW_UP:
   case 'k':
     if (E.cy <= 0) {
