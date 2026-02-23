@@ -34,6 +34,7 @@ enum editorKey {
 };
 
 #define KILO_VERSION "0.0.1"
+#define KILO_TAB_STOP 8
 
 /***** EXIT SEQUENCES *****/
 
@@ -45,7 +46,9 @@ char quitBuffer[3];
 
 typedef struct erow {
   int size;
+  int rsize;
   char *chars;
+  char *render;
 } erow;
 
 struct editorConfig {
@@ -213,6 +216,31 @@ int getWindowSize(int *rows, int *cols) {
 
 /***** ROW OPERATIONS *****/
 
+void editorUpdateRow(erow *row) {
+  int tabs = 0;
+  int j = 0;
+  for (j = 0; j < row->size; ++j) {
+    if (row->chars[j] == '\t')
+      tabs++;
+  }
+
+  free(row->render);
+  row->render = malloc(row->size + tabs * (KILO_TAB_STOP - 1) + 1);
+
+  int idx = 0;
+  for (j = 0; j < row->size; ++j) {
+    if (row->chars[j] == '\t') {
+      row->render[idx++] = ' ';
+      while (idx % KILO_TAB_STOP != 0)
+        row->render[idx++] = ' ';
+    } else {
+      row->render[idx++] = row->chars[j];
+    }
+  }
+  row->render[idx] = '\0';
+  row->rsize = idx;
+}
+
 void editorAppendRow(char *s, size_t len) {
   E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1 + 4));
   int at = E.numrows;
@@ -222,7 +250,12 @@ void editorAppendRow(char *s, size_t len) {
 
   memcpy(E.row[at].chars, s, len);
   E.row[at].chars[len] = '\0';
-  E.numrows += 1;
+
+  E.row[at].rsize = 0;
+  E.row[at].render = NULL;
+  editorUpdateRow(&E.row[at]);
+
+  E.numrows++;
 }
 
 /***** File I/O *****/
@@ -329,7 +362,7 @@ void editorDrawRows(struct abuf *ab) {
         abAppend(ab, " ~", 2);
       }
     } else {
-      int len = (E.row[fileRow].size - E.coloff) + strlen(rowNumber) + 2;
+      int len = (E.row[fileRow].rsize - E.coloff) + strlen(rowNumber) + 2;
       if (len < 0)
         len = 0;
       if (len > E.screencols)
@@ -340,7 +373,7 @@ void editorDrawRows(struct abuf *ab) {
       }
       abAppend(ab, rowNumber, strlen(rowNumber) + 1);
       abAppend(ab, " ", 1);
-      abAppend(ab, &E.row[fileRow].chars[E.coloff],
+      abAppend(ab, &E.row[fileRow].render[E.coloff],
                len - strlen(rowNumber) - 2);
     }
 
