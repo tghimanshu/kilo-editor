@@ -53,6 +53,7 @@ typedef struct erow {
 
 struct editorConfig {
   int cx, cy;
+  int rx;
   int rowoff;
   int coloff;
   int screenrows;
@@ -216,6 +217,17 @@ int getWindowSize(int *rows, int *cols) {
 
 /***** ROW OPERATIONS *****/
 
+int editorRowCxToRx(erow *row, int cx){
+    int rx = 0;
+    for (int j = 0; j < cx; ++j) {
+        if (row->chars[j] == '\t')
+            rx += (KILO_TAB_STOP - 1) - (rx % KILO_TAB_STOP);
+        rx++;
+    }
+
+    return rx;
+}
+
 void editorUpdateRow(erow *row) {
   int tabs = 0;
   int j = 0;
@@ -307,6 +319,11 @@ void abFree(struct abuf *ab) { free(ab->b); }
 /***** OUTPUT *****/
 
 void editorScroll() {
+    E.rx = 0;
+    if (E.cy < E.numrows) {
+        E.rx = editorRowCxToRx(&E.row[E.cy], E.cx);
+    }
+
   if (E.cy < E.rowoff) {
     E.rowoff = E.cy;
   }
@@ -315,12 +332,12 @@ void editorScroll() {
     E.rowoff = E.cy - E.screenrows + 1;
   }
 
-  if (E.cx < E.coloff) {
-    E.coloff = E.cx;
+  if (E.rx < E.coloff) {
+    E.coloff = E.rx;
   }
 
-  if (E.cx >= E.coloff + E.screencols) {
-    E.coloff = E.cx - E.screencols + 1;
+  if (E.rx >= E.coloff + E.screencols) {
+    E.coloff = E.rx - E.screencols + 1;
   }
 }
 
@@ -396,7 +413,7 @@ void editorRefreshScreen() {
 
   char buff[32];
   snprintf(buff, sizeof(buff), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1,
-           (E.cx - E.coloff) + 1);
+           (E.rx - E.coloff) + 1);
   abAppend(&ab, buff, strlen(buff));
 
   abAppend(&ab, "\x1b[?25h", 6); // show cursor
@@ -478,16 +495,22 @@ void editorProcessKeypress() {
 
   case PAGE_UP:
   case PAGE_DOWN: {
+    if (c == PAGE_UP) {
+        E.cy = E.rowoff;
+    }else if (c == PAGE_DOWN) {
+        E.cy = E.rowoff + E.screenrows - 1;
+        if (E.cy > E.numrows) E.cy = E.numrows;
+    }
     int times = E.screenrows;
     while (times--)
       editorMoveCursor(c == PAGE_UP ? ARROW_UP : ARROW_DOWN);
   } break;
   case HOME_KEY:
-  case END_KEY: {
-    int times = E.screencols;
-    while (times--)
-      editorMoveCursor(c == HOME_KEY ? ARROW_LEFT : ARROW_RIGHT);
-  } break;
+    E.cx = 0;
+    break;
+  case END_KEY: 
+    if (E.cy < E.numrows) E.cx = E.row[E.cy].size;
+   break;
 
   case ARROW_UP:
   case ARROW_DOWN:
@@ -507,6 +530,7 @@ void editorProcessKeypress() {
 int initEditor() {
   E.cx = 3;
   E.cy = 0;
+  E.rx = 0;
   E.numrows = 0;
   E.row = NULL;
   E.rowoff = 0;
