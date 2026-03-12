@@ -258,7 +258,7 @@ void editorAppendRow(char *s, size_t len) {
   int at = E.numrows;
 
   E.row[at].size = len;
-  E.row[E.numrows].chars = malloc(len + 1);
+  E.row[E.numrows].chars = malloc(len + 1 + 4);
 
   memcpy(E.row[at].chars, s, len);
   E.row[at].chars[len] = '\0';
@@ -361,6 +361,9 @@ void editorDrawRows(struct abuf *ab) {
         int padding = (E.screencols - welcomelen) / 2;
 
         if (padding) {
+            if (y < 9) {
+              abAppend(ab, " ", 1);
+            }
           abAppend(ab, rowNumber, strlen(rowNumber) + 1);
           abAppend(ab, " ~", 2);
           padding -= strlen(rowNumber) + 3;
@@ -394,7 +397,7 @@ void editorDrawRows(struct abuf *ab) {
                len - strlen(rowNumber) - 2);
     }
 
-    abAppend(ab, "\x1b[K", 3);
+    abAppend(ab, "\x1b[K", 3); // clear line from cursor to right edge
     if (y < E.screenrows - 1) {
       abAppend(ab, "\r\n", 2);
     }
@@ -430,7 +433,7 @@ void editorMoveCursor(int key) {
 
   case ARROW_LEFT:
   case 'h':
-    if (E.cx != 0) {
+    if (E.cx >= 4) {
       E.cx--;
     } else if (E.cy > 0) {
       E.cy--;
@@ -452,7 +455,7 @@ void editorMoveCursor(int key) {
       E.cx++;
     } else if (row && E.cx == row->size) {
       E.cy++;
-      E.cx = 0;
+      E.cx = 3;
     }
     break;
 
@@ -478,7 +481,7 @@ void editorMoveCursor(int key) {
 
   row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy];
   int rowlen = row ? row->size : 0;
-  if (E.cx > rowlen) {
+  if (E.cx >= rowlen) {
     E.cx = rowlen;
   }
 }
@@ -530,7 +533,7 @@ void editorProcessKeypress() {
 int initEditor() {
   E.cx = 3;
   E.cy = 0;
-  E.rx = 0;
+  E.rx = 3;
   E.numrows = 0;
   E.row = NULL;
   E.rowoff = 0;
