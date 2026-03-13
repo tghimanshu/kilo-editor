@@ -258,10 +258,10 @@ void editorAppendRow(char *s, size_t len) {
   E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1 + 4));
   int at = E.numrows;
 
-  E.row[at].size = len;
+  E.row[at].size = len + 1;
   E.row[E.numrows].chars = malloc(len + 1 + 4);
 
-  memcpy(E.row[at].chars, s, len);
+  memcpy(E.row[at].chars, s, len + 1);
   E.row[at].chars[len] = '\0';
 
   E.row[at].rsize = 0;
@@ -411,7 +411,8 @@ void editorDrawStatusBar(struct abuf *ab) {
   char status[80], rstatus[80];
   int len = snprintf(status, sizeof(status), "%.20s - %d lines",
                      E.filename ? E.filename : "[No Name]", E.numrows);
-  int rlen = snprintf(rstatus, sizeof(rstatus), "%d/%d", E.cy + 1, E.numrows);
+  int rlen = snprintf(rstatus, sizeof(rstatus), "%d/%d - %d/%d", E.cx,
+                      E.row[E.cy].size, E.cy + 1, E.numrows);
   if (len > E.screencols)
     len = E.screencols;
   abAppend(ab, status, len);
