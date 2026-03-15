@@ -24,6 +24,7 @@
 #define CTRL_KEY(k) ((k) & 0x1f)
 
 enum editorKey {
+  BACKSPACE = 127,   // ASCII code for backspace key (just to keep known)
   ARROW_LEFT = 1000, // all others will auto map to 1001, 1002 and so on
   ARROW_RIGHT,
   ARROW_UP,
@@ -233,7 +234,7 @@ int editorRowCxToRx(erow *row, int cx) {
   return rx;
 }
 
-void editorUpdateRow(erow *row) {
+void editorUpdateRow(erow *row, int at) {
   int tabs = 0;
   int j = 0;
   for (j = 0; j < row->size; ++j) {
@@ -259,20 +260,43 @@ void editorUpdateRow(erow *row) {
 }
 
 void editorAppendRow(char *s, size_t len) {
-  E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1 + 4));
+  E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
   int at = E.numrows;
 
   E.row[at].size = len + 1;
-  E.row[E.numrows].chars = malloc(len + 1 + 4);
+  E.row[E.numrows].chars = malloc(len + 1);
 
   memcpy(E.row[at].chars, s, len + 1);
   E.row[at].chars[len] = '\0';
 
   E.row[at].rsize = 0;
   E.row[at].render = NULL;
-  editorUpdateRow(&E.row[at]);
+  editorUpdateRow(&E.row[at], at);
 
   E.numrows++;
+}
+
+void editorRowInsertChar(erow *row, int at, int c) {
+  if (at < 0 || at > row->size)
+    at = row->size;
+
+  at -= 3; // adjust for line number and space
+
+  row->chars = realloc(row->chars, row->size + 2);
+  memmove(&row->chars[at + 1], &row->chars[at], row->size - at + 1);
+  row->size++;
+  row->chars[at] = c;
+  editorUpdateRow(row, at);
+}
+
+/***** Editor Operations *****/
+
+void editorInsertChar(int c) {
+  if (E.cy == E.numrows) {
+    editorAppendRow("", 0);
+  }
+  editorRowInsertChar(&E.row[E.cy], E.cx, c);
+  E.cx++;
 }
 
 /***** File I/O *****/
@@ -482,7 +506,7 @@ void editorMoveCursor(int key) {
   switch (key) {
 
   case ARROW_LEFT:
-  case 'h':
+    // case 'h':
     if (E.cx >= 4) {
       E.cx--;
     } else if (E.cy > 0) {
@@ -500,7 +524,7 @@ void editorMoveCursor(int key) {
     break;
 
   case ARROW_RIGHT:
-  case 'l':
+    // case 'l':
     if (row && E.cx < row->size) {
       E.cx++;
     } else if (row && E.cx == row->size) {
@@ -510,14 +534,14 @@ void editorMoveCursor(int key) {
     break;
 
   case ARROW_DOWN:
-  case 'j':
+    // case 'j':
     if (E.cy < E.numrows) {
       E.cy++;
     }
     break;
 
   case ARROW_UP:
-  case 'k':
+    // case 'k':
     if (E.cy <= 0) {
       E.cy = 0;
       if (E.rowoff > 0) {
@@ -540,10 +564,20 @@ void editorProcessKeypress() {
   int c = editorReadKey();
 
   switch (c) {
+  case '\r':
+    /* TODO: Implement Backspace */
+    break;
   case CTRL_KEY('q'):
     write(STDOUT_FILENO, "\x1b[2J", 4); // clear entire screen
     write(STDOUT_FILENO, "\x1b[H", 3);  // cursor to top-left corner
     exit(0);
+    break;
+
+  case BACKSPACE:
+  case CTRL_KEY('h'): // Ctrl-H is often used as an alternative to Backspace (it
+                      // was on old terminals)
+  case DEL_KEY:
+    /* TODO: Implement Backspace */
     break;
 
   case PAGE_UP:
@@ -571,12 +605,19 @@ void editorProcessKeypress() {
   case ARROW_DOWN:
   case ARROW_LEFT:
   case ARROW_RIGHT:
-  case 'h':
-  case 'j':
-  case 'k':
-  case 'l':
+    // case 'h':
+    // case 'j':
+    // case 'k':
+    // case 'l':
     editorMoveCursor(c);
     break;
+
+  case CTRL_KEY('l'): // Ctrl-L is often used to refresh the screen
+  case '\x1b':        // Escape key
+    break;
+
+  default:
+    editorInsertChar(c);
   }
 }
 
