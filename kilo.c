@@ -56,6 +56,7 @@ typedef struct erow {
 } erow;
 
 struct editorConfig {
+  int guttersize;
   int cx, cy;
   int rx;
   int rowoff;
@@ -281,7 +282,7 @@ void editorRowInsertChar(erow *row, int at, int c) {
   if (at < 0 || at > row->size)
     at = row->size;
 
-  at -= 3; // adjust for line number and space
+  at -= E.guttersize + 1; // adjust for line number and space
 
   row->chars = realloc(row->chars, row->size + 2);
   memmove(&row->chars[at + 1], &row->chars[at], row->size - at + 1);
@@ -407,6 +408,16 @@ void editorScroll() {
   }
 }
 
+void editorDrawRowNumberPadding(struct abuf *ab, int y) {
+  if (y < 9) {
+    abAppend(ab, "   ", 3);
+  } else if (y < 99) {
+    abAppend(ab, "  ", 2);
+  }
+  // BUG: For line numbers 100 and above, no padding is added but still it has
+  // padding and breaks the alignment.
+}
+
 void editorDrawRows(struct abuf *ab) {
   for (int y = 0; y < E.screenrows; ++y) {
     char rowNumber[32];
@@ -427,9 +438,7 @@ void editorDrawRows(struct abuf *ab) {
         int padding = (E.screencols - welcomelen) / 2;
 
         if (padding) {
-          if (y < 9) {
-            abAppend(ab, " ", 1);
-          }
+          editorDrawRowNumberPadding(ab, y);
           abAppend(ab, rowNumber, strlen(rowNumber) + 1);
           abAppend(ab, " ~", 2);
           padding -= strlen(rowNumber) + 3;
@@ -444,6 +453,7 @@ void editorDrawRows(struct abuf *ab) {
         if (y < 9) {
           abAppend(ab, " ", 1);
         }
+        editorDrawRowNumberPadding(ab, y);
         abAppend(ab, rowNumber, strlen(rowNumber) + 1);
         abAppend(ab, " ~", 2);
       }
@@ -454,9 +464,7 @@ void editorDrawRows(struct abuf *ab) {
       if (len > E.screencols)
         len = E.screencols;
 
-      if (y < 9) {
-        abAppend(ab, " ", 1);
-      }
+      editorDrawRowNumberPadding(ab, y);
       abAppend(ab, rowNumber, strlen(rowNumber) + 1);
       abAppend(ab, " ", 1);
       abAppend(ab, &E.row[fileRow].render[E.coloff],
@@ -541,11 +549,11 @@ void editorMoveCursor(int key) {
 
   case ARROW_LEFT:
     // case 'h':
-    if (E.cx >= 4) {
+    if (E.cx >= E.guttersize + 2) {
       E.cx--;
     } else if (E.cy > 0) {
       E.cy--;
-      E.cx = E.row[E.cy].size;
+      E.cx = E.row[E.cy].size + E.guttersize + 1;
     }
     // if (E.cx <= 0) {
     //   E.cx = 0;
@@ -559,11 +567,11 @@ void editorMoveCursor(int key) {
 
   case ARROW_RIGHT:
     // case 'l':
-    if (row && E.cx < row->size) {
+    if (row && E.cx < row->size + E.guttersize) {
       E.cx++;
-    } else if (row && E.cx == row->size) {
+    } else if (row && E.cx == row->size + E.guttersize) {
       E.cy++;
-      E.cx = 3;
+      E.cx = E.guttersize + 1;
     }
     break;
 
@@ -588,7 +596,7 @@ void editorMoveCursor(int key) {
   }
 
   row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy];
-  int rowlen = row ? row->size : 0;
+  int rowlen = row ? row->size + E.guttersize : 0;
   if (E.cx >= rowlen) {
     E.cx = rowlen;
   }
@@ -662,7 +670,8 @@ void editorProcessKeypress() {
 /***** MAIN *****/
 
 int initEditor() {
-  E.cx = 3;
+  E.guttersize = 4;
+  E.cx = E.guttersize + 1;
   E.cy = 0;
   E.rx = 3;
   E.numrows = 0;
