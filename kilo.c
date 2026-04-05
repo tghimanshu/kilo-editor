@@ -299,6 +299,26 @@ void editorRowInsertChar(erow *row, int at, int c) {
   E.dirty++;
 }
 
+void editorRowDelChar(erow *row, int at) {
+  if (at < 0 || at >= row->size)
+    return;
+  memmove(&row->chars[at], &row->chars[at + 1], row->size - at);
+  row->size--;
+  editorUpdateRow(row, at);
+  E.dirty++;
+}
+
+void editorDelChar() {
+  if (E.cy == E.numrows)
+    return;
+
+  erow *row = &E.row[E.cy];
+  if (E.cx > E.guttersize + 1) {
+    editorRowDelChar(row, E.cx - 1 - E.guttersize - 1);
+    E.cx--;
+  }
+}
+
 /***** Editor Operations *****/
 
 void editorInsertChar(int c) {
@@ -653,6 +673,9 @@ void editorProcessKeypress() {
                       // was on old terminals)
   case DEL_KEY:
     /* TODO: Implement Backspace */
+    if (c == DEL_KEY)
+      editorMoveCursor(ARROW_RIGHT);
+    editorDelChar();
     break;
 
   case PAGE_UP:
